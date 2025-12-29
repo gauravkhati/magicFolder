@@ -1,0 +1,23 @@
+# Build artifacts
+build/
+cmake-build-*/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Compiled binaries
+magic_folder
+*.o
+*.a
+*.so
+*.dylib
+
+# macOS
+.DS_Store
+
+# Backing store (runtime data)
+# Note: This is in ~/.magicFolder, not in the repo
