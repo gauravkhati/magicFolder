@@ -1,5 +1,9 @@
 /**
  * MagicFolder - A self-organizing FUSE filesystem
+ * Phase 1: Passthrough driver with "vanish" trick
+ * 
+ * Files written to the mount point are stored in a backing directory
+ * but "vanish" from the root listing until classified.
  */
 
 #define FUSE_USE_VERSION 31

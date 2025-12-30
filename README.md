@@ -9,6 +9,32 @@ This implementation creates a FUSE filesystem that:
 2. **Intercepts writes**: When files are written to the root of the mount point, they're marked for classification
 3. **Implements the "Vanish" trick**: Files in the classification queue are hidden from directory listings
 
+## Phase 2: The Python Brain (Analysis Engine)
+
+The "Brain" is a standalone Python service that classifies files based on their content or metadata. It communicates with the FUSE driver (in future phases) or test scripts via ZeroMQ IPC.
+
+### Setup
+
+1. **Install Python dependencies**:
+   ```bash
+   pip install -r classifier/requirements.txt
+   ```
+
+2. **Run the Brain service**:
+   ```bash
+   python classifier/brain.py
+   ```
+
+3. **Test the Brain**:
+   In a separate terminal:
+   ```bash
+   python classifier/test_brain.py invoice.pdf
+   # Output: {'category': 'Documents', 'path': 'invoice.pdf'}
+   
+   python classifier/test_brain.py vacation.jpg
+   # Output: {'category': 'Images', 'path': 'vacation.jpg'}
+   ```
+
 ## Prerequisites
 
 ### macOS
