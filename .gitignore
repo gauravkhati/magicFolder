@@ -18,6 +18,23 @@ magic_folder
 
 # macOS
 .DS_Store
+._*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.env
+.venv/
+env/
+
+# Logs
+*.log
+
+# IPC sockets
+*.ipc
 
 # Backing store (runtime data)
 # Note: This is in ~/.magicFolder, not in the repo

@@ -31,17 +31,7 @@ check_dependencies() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
         if ! pkg-config --exists fuse3 2>/dev/null; then
             echo "Error: macFUSE is not installed or fuse3 pkg-config is not found"
-            echo ""
-            echo "To install macFUSE:"
-            echo "  1. Download from: https://osxfuse.github.io/"
-            echo "  2. Or install via: brew install --cask macfuse"
-            echo ""
-            echo "After installing macFUSE, you may need to:"
-            echo "  - Restart your computer"
-            echo "  - Allow the kernel extension in System Preferences > Security & Privacy"
-            echo ""
-            echo "For pkg-config to find fuse3, you may need:"
-            echo "  export PKG_CONFIG_PATH=\"/usr/local/lib/pkgconfig:\$PKG_CONFIG_PATH\""
+            # ... (existing instructions)
             exit 1
         fi
     else
@@ -50,6 +40,17 @@ check_dependencies() {
             echo "Install with: sudo apt-get install libfuse3-dev fuse3"
             exit 1
         fi
+    fi
+
+    # Check for ZeroMQ
+    if ! pkg-config --exists libzmq 2>/dev/null; then
+        echo "Error: libzmq is not installed"
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            echo "Install with: brew install zeromq"
+        else
+            echo "Install with: sudo apt-get install libzmq3-dev"
+        fi
+        exit 1
     fi
     
     echo "All dependencies found!"

@@ -1,2 +1,7 @@
 pyzmq==25.1.2
 watchdog==3.0.0
+Pillow
+pytesseract
+pdf2image
+langchain-google-genai
+python-dotenv 

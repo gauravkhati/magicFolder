@@ -8,6 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Find required packages
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FUSE3 REQUIRED fuse3)
+pkg_check_modules(ZMQ REQUIRED libzmq)
 
 # Main executable
 add_executable(magic_folder
@@ -17,16 +18,24 @@ add_executable(magic_folder
 # Include directories
 target_include_directories(magic_folder PRIVATE
     ${FUSE3_INCLUDE_DIRS}
+    ${ZMQ_INCLUDE_DIRS}
+)
+
+# Link directories
+target_link_directories(magic_folder PRIVATE
+    ${ZMQ_LIBRARY_DIRS}
 )
 
 # Link libraries
 target_link_libraries(magic_folder PRIVATE
     ${FUSE3_LIBRARIES}
+    ${ZMQ_LIBRARIES}
 )
 
 # Compiler flags
 target_compile_options(magic_folder PRIVATE
     ${FUSE3_CFLAGS_OTHER}
+    ${ZMQ_CFLAGS_OTHER}
     -Wall
     -Wextra
     -Wpedantic
