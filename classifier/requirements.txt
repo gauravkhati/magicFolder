@@ -4,4 +4,5 @@ Pillow
 pytesseract
 pdf2image
 langchain-google-genai
+pinecone
 python-dotenv 

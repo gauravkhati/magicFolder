@@ -4,6 +4,8 @@ import json
 import time
 from ocr import ocr_extract
 from llm import classifyUsingLLMClassification
+from rag import process_and_store_embeddings
+import threading
 
 IPC_ADDRESS = "ipc:///tmp/magic_brain.ipc"
 #need to get file as well as data
@@ -202,6 +204,33 @@ def main():
             response = {"results": results}           # Send reply back to client
             print(f"[Brain] Sending response: {response}")
             socket.send_json(response)
+            
+            # 4. Post-Processing: RAG (Summarization + Embedding + Pinecone)
+            # Run in a separate thread to avoid blocking the next request loop
+            # We need to combine results with content
+            rag_input = []
+            for res in results:
+                path = res["path"]
+                cat = res["category"]
+                # Find content
+                content = ""
+                for item in file_contents:
+                    if item["filepath"] == path:
+                        content = item["content"]
+                        break
+                
+                if content:
+                    rag_input.append({
+                        "filepath": path,
+                        "content": content,
+                        "category": cat
+                    })
+            
+            if rag_input:
+                print(f"[Brain] Triggering background RAG processing for {len(rag_input)} files...")
+                rag_thread = threading.Thread(target=process_and_store_embeddings, args=(rag_input,))
+                rag_thread.daemon = True # Daemon thread so it doesn't block shutdown
+                rag_thread.start()
             
         except KeyboardInterrupt:
             print("\n[Brain] Shutting down...")
