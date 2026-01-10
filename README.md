@@ -14,7 +14,7 @@ Once processed, you don't browse folders manually. You use the **Sci-Fi Terminal
        USER
          │ (Copy File)
          ▼
-    [/tmp/magic]
+    [/tmp/magicFolder]
          │
          ▼
 ┌─────────────────────────┐
@@ -136,15 +136,15 @@ python classifier/brain.py
 *You'll see it waiting for ZeroMQ messages...*
 
 ### Terminal 2: The Filesystem 📂
-Mount the MagicFolder. Replace `/tmp/magic` with your desired mount point.
+Mount the MagicFolder. Replace `/tmp/magicFolder` with your desired mount point.
 ```bash
 # Create mount point if it doesn't exist
-mkdir -p /tmp/magic
+mkdir -p /tmp/magicFolder
 
 # Mount it
-./mount.sh /tmp/magic
+./mount.sh /tmp/magicFolder
 ```
-*Any file you drop into `/tmp/magic` will now vanish and be processed by the Brain.*
+*Any file you drop into `/tmp/magicFolder` will now vanish and be processed by the Brain.*
 
 ### Terminal 3: The Interface 🖥
 Launch the TUI to search and interact with your processed files.
@@ -154,11 +154,11 @@ python tui_client/app.py
 ```
 
 ### Testing the Loop
-1.  **Drop a file**: Copy an invoice or an image into `/tmp/magic`.
+1.  **Drop a file**: Copy an invoice or an image into `/tmp/magicFolder`.
     ```bash
-    cp ~/Downloads/invoice_123.pdf /tmp/magic/
+    cp ~/Downloads/invoice_123.pdf /tmp/magicFolder/
     ```
-2.  **Watch it vanish**: The file will disappear from `/tmp/magic` instantly.
+2.  **Watch it vanish**: The file will disappear from `/tmp/magicFolder` instantly.
 3.  **Check the Brain**: Terminal 1 will show logs: "Processing invoice_123.pdf... Classified as Invoices."
 4.  **Query the TUI**: In Terminal 3, type:
     > "Find the invoice I just uploaded and tell me the total amount."
@@ -189,7 +189,7 @@ Check that your `.env` file has valid API keys and that you are running inside t
 
 **How to restart?**:
 If things get stuck:
-1.  Run `./unmount.sh /tmp/magic` to safely detach the filesystem.
+1.  Run `./unmount.sh /tmp/magicFolder` to safely detach the filesystem.
 2.  Kill the Python processes.
 3.  Start over from Terminal 1.
 
