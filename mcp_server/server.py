@@ -4,6 +4,12 @@ import shutil
 import re
 import json
 import time
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
+from typing import List, Optional
+
 from mcp.server.fastmcp import FastMCP
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from pinecone import Pinecone
@@ -411,6 +417,75 @@ def export_search_results(format: str = "csv") -> str:
         
     except Exception as e:
         return f"Error exporting: {e}"
+
+@mcp.tool()
+def send_email_with_export(to_email: str, subject: str, body: str, filename: Optional[str] = None) -> str:
+    """
+    Send an email with an optional attachment from the exports folder.
+    
+    Args:
+        to_email: Recipient email address.
+        subject: Email subject.
+        body: Email body text.
+        filename: Specific filename in the 'exports' folder to attach. 
+                  If not provided, finds the most recently created export file.
+    """
+    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+
+    if not smtp_user or not smtp_password:
+        return "Error: SMTP_USER or SMTP_PASSWORD not set in environment variables."
+
+    folder_name = "exports"
+    result_dir = os.path.join(SEARCH_RESULTS_ROOT, folder_name)
+    attachment_path = None
+
+    # Handle Attachment Recovery
+    if not os.path.exists(result_dir):
+         return "Error: No exports folder found to attach files from."
+
+    if filename:
+        potential_path = os.path.join(result_dir, filename)
+        if os.path.exists(potential_path):
+            attachment_path = potential_path
+        else:
+            return f"Error: File '{filename}' not found in exports folder."
+    else:
+        # Find latest file
+        try:
+            files = [os.path.join(result_dir, f) for f in os.listdir(result_dir) if os.path.isfile(os.path.join(result_dir, f))]
+            if files:
+                attachment_path = max(files, key=os.path.getctime)
+        except Exception as e:
+            return f"Error finding latest export: {e}"
+
+    # Construct Email
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = smtp_user
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+
+        if attachment_path:
+            with open(attachment_path, "rb") as f:
+                part = MIMEApplication(f.read(), Name=os.path.basename(attachment_path))
+            part['Content-Disposition'] = f'attachment; filename="{os.path.basename(attachment_path)}"'
+            msg.attach(part)
+
+        # Send
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        server.send_message(msg)
+        server.quit()
+        
+        return f"Email sent to {to_email} successfully." + (f" Attached: {os.path.basename(attachment_path)}" if attachment_path else "")
+
+    except Exception as e:
+        return f"Failed to send email: {e}"
 
 if __name__ == "__main__":
     mcp.run()
