@@ -165,6 +165,17 @@ python tui_client/app.py
 
 ---
 
+## 🔒 Privacy: Running Locally
+
+If you require absolute privacy, the MagicFolder architecture is designed to be modular allows replacing cloud services with local equivalents.
+
+*   **LLM**: You can run [Ollama](https://ollama.com) (e.g., with `llama3` or `mistral`) instead of Google Gemini.
+*   **Vector DB**: You can swap Pinecone for a local **ChromaDB** or **Qdrant** instance running in Docker.
+
+*Note: This currently requires modifying the `langchain` initialization in `classifier/rag.py` and `tui_client/app.py` to point to your local endpoints.*
+
+---
+
 ## 🔧 Troubleshooting
 
 **"Operation not permitted" on macOS**:
