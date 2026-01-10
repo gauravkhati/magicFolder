@@ -1,7 +1,5 @@
 /**
  * MagicFolder - A self-organizing FUSE filesystem
- * Phase 1: Passthrough driver with "vanish" trick
- * 
  * Files written to the mount point are stored in a backing directory
  * but "vanish" from the root listing until classified.
  */
@@ -53,7 +51,7 @@ class MagicFolderState {
 public:
     std::string backing_store;  // ~/.magicFolder/raw
     std::vector<FileMetadata> unclassified_queue;
-    std::unordered_set<std::string> hidden_files;  // Files to hide from root listing
+    std::unordered_set<std::string> hidden_files; 
     
     // Virtual Directory Structure
     // Category -> List of filenames
@@ -63,7 +61,6 @@ public:
     
     std::mutex state_mutex;
     
-    // Async Processing
     std::queue<std::string> processing_queue;
     std::unordered_set<std::string> queued_files; // To prevent duplicates
     std::mutex queue_mutex;
@@ -71,7 +68,6 @@ public:
     std::thread worker_thread;
     std::atomic<bool> running;
 
-    // ZeroMQ
     void* context;
     void* socket;
     
@@ -84,8 +80,7 @@ public:
         context = zmq_ctx_new();
         socket = zmq_socket(context, ZMQ_REQ);
         
-        // Set timeout to avoid hanging if Python brain is down
-        // Increased to 60 seconds because LLM/OCR processing can be slow
+        // timeout to avoid hanging because LLM/OCR processing can be slow
         int timeout = 60000; 
         zmq_setsockopt(socket, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
         zmq_setsockopt(socket, ZMQ_SNDTIMEO, &timeout, sizeof(timeout));
@@ -97,7 +92,7 @@ public:
             std::cerr << "[MagicFolder] Failed to connect to Brain IPC: " << zmq_strerror(errno) << std::endl;
         }
 
-        // Start worker thread
+        //worker thread
         running = true;
         worker_thread = std::thread(&MagicFolderState::worker_loop, this);
     }
@@ -124,7 +119,6 @@ public:
                     batch.push_back(processing_queue.front());
                     processing_queue.pop();
                 }
-                // We keep files in queued_files until processing is done to prevent duplicates
             }
             
             if (!batch.empty()) {
@@ -149,7 +143,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(state_mutex);
             if (file_category_map.count(filename)) {
-                return; // Already classified
+                return;
             }
         }
 
@@ -157,7 +151,7 @@ public:
             std::lock_guard<std::mutex> lock(queue_mutex);
             // Check if already in queue
             if (queued_files.count(filename)) {
-                return; // Already queued
+                return;
             }
             
             processing_queue.push(filename);
@@ -178,7 +172,6 @@ public:
     }
     
     void add_to_queue(const std::string& filename, const std::string& full_path) {
-        // Ignore macOS metadata files
         if (filename == ".DS_Store" || (filename.size() >= 2 && filename.substr(0, 2) == "._")) {
             return;
         }
@@ -199,7 +192,6 @@ public:
         return unclassified_queue.size();
     }
     
-    // Request classification from Python Brain (Batch)
     void classify_files_batch(const std::vector<std::string>& filenames) {
         if (filenames.empty()) return;
 
@@ -229,8 +221,7 @@ public:
             for (const auto& filename : filenames) {
                 std::string full_path = backing_store + "/" + filename;
                 
-                // Find the object containing this path
-                // We look for the path string, then find the surrounding {}
+                //json parsing
                 size_t p_pos = response.find(full_path);
                 if (p_pos != std::string::npos) {
                     size_t obj_start = response.rfind("{", p_pos);
@@ -261,10 +252,9 @@ public:
         
         // Remove from hidden/unclassified
         hidden_files.erase(filename);
-        // Note: We don't remove from unclassified_queue vector efficiently, 
-        // but for MVP we just ignore it or clear it periodically.
+        //!Note: We don't remove from unclassified_queue vector efficiently, 
+        //! but for MVP we just ignore it or clear it periodically.
         
-        // Add to category
         categories[category].push_back(filename);
         file_category_map[filename] = category;
         
@@ -275,7 +265,7 @@ private:
     MagicFolderState() : context(nullptr), socket(nullptr) {}
 };
 
-// Helper: Get the real path in the backing store
+// Helper FN: Get the real path in the backing store
 static std::string get_real_path(const char* path) {
     std::string p(path);
     
@@ -317,9 +307,9 @@ static bool is_ignored_file(const std::string& filename) {
     return (filename == ".DS_Store" || (filename.size() >= 2 && filename.substr(0, 2) == "._"));
 }
 
-// FUSE Operations
+// FUSE Operations 
+//todo: supports macOS specific attributes for now. If needed willl add support for linux and windows.
 
-#ifdef __APPLE__
 static int magic_getattr(const char* path, struct fuse_darwin_attr* stbuf, struct fuse_file_info* fi) {
     (void) fi;
     memset(stbuf, 0, sizeof(struct fuse_darwin_attr));
@@ -349,7 +339,7 @@ static int magic_getattr(const char* path, struct fuse_darwin_attr* stbuf, struc
         stbuf->gid = getgid();
         stbuf->size = 4096;
         stbuf->blocks = 8;
-        stbuf->ino = std::hash<std::string>{}(p); // Fake inode based on path hash
+        stbuf->ino = std::hash<std::string>{}(p); /
         stbuf->atimespec.tv_sec = time(nullptr);
         stbuf->mtimespec.tv_sec = time(nullptr);
         stbuf->ctimespec.tv_sec = time(nullptr);
@@ -382,47 +372,6 @@ static int magic_getattr(const char* path, struct fuse_darwin_attr* stbuf, struc
     
     return 0;
 }
-#else
-static int magic_getattr(const char* path, struct stat* stbuf, struct fuse_file_info* fi) {
-    (void) fi;
-    memset(stbuf, 0, sizeof(struct stat));
-    
-    std::string p(path);
-    bool is_virtual_dir = false;
-    
-    // Check if it's a virtual category directory
-    if (p != "/") {
-        std::string name = p.substr(1);
-        if (name.find('/') == std::string::npos) {
-            std::lock_guard<std::mutex> lock(MagicFolderState::instance().state_mutex);
-            if (MagicFolderState::instance().categories.count(name)) {
-                is_virtual_dir = true;
-            }
-        }
-    }
-    
-    if (is_virtual_dir) {
-        stbuf->st_mode = S_IFDIR | 0755;
-        stbuf->st_nlink = 2;
-        stbuf->st_uid = getuid();
-        stbuf->st_gid = getgid();
-        stbuf->st_size = 4096;
-        stbuf->st_atime = time(nullptr);
-        stbuf->st_mtime = time(nullptr);
-        stbuf->st_ctime = time(nullptr);
-        return 0;
-    }
-    
-    std::string real_path = get_real_path(path);
-    
-    int res = lstat(real_path.c_str(), stbuf);
-    if (res == -1) {
-        return -errno;
-    }
-    
-    return 0;
-}
-#endif
 
 static int magic_access(const char* path, int mask) {
     std::string p(path);
@@ -433,7 +382,7 @@ static int magic_access(const char* path, int mask) {
         if (name.find('/') == std::string::npos) {
             std::lock_guard<std::mutex> lock(MagicFolderState::instance().state_mutex);
             if (MagicFolderState::instance().categories.count(name)) {
-                return 0; // Virtual directories are always accessible
+                return 0;
             }
         }
     }
@@ -448,15 +397,9 @@ static int magic_access(const char* path, int mask) {
     return 0;
 }
 
-#ifdef __APPLE__
 static int magic_readdir(const char* path, void* buf, fuse_darwin_fill_dir_t filler,
                          off_t offset, struct fuse_file_info* fi,
                          enum fuse_readdir_flags flags) {
-#else
-static int magic_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
-                         off_t offset, struct fuse_file_info* fi,
-                         enum fuse_readdir_flags flags) {
-#endif
     (void) offset;
     (void) fi;
     (void) flags;
@@ -558,15 +501,7 @@ static int magic_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
                 struct dirent* de;
                 while ((de = readdir(dp)) != nullptr) {
                     if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
-                    #ifdef __APPLE__
                     if (filler(buf, de->d_name, nullptr, 0, FUSE_FILL_DIR_PLUS)) break;
-                    #else
-                    struct stat st;
-                    memset(&st, 0, sizeof(st));
-                    st.st_ino = de->d_ino;
-                    st.st_mode = de->d_type << 12;
-                    if (filler(buf, de->d_name, &st, 0, FUSE_FILL_DIR_PLUS)) break;
-                    #endif
                 }
                 closedir(dp);
             }
@@ -579,14 +514,13 @@ static int magic_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
 static int magic_opendir(const char* path, struct fuse_file_info* fi) {
     (void) fi;
     std::string p(path);
-    
-    // Check if virtual directory
+
     if (p != "/") {
         std::string name = p.substr(1);
         if (name.find('/') == std::string::npos) {
             std::lock_guard<std::mutex> lock(MagicFolderState::instance().state_mutex);
             if (MagicFolderState::instance().categories.count(name)) {
-                return 0; // Success for virtual dir
+                return 0;
             }
         }
     }

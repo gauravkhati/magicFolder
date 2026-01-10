@@ -2,11 +2,11 @@ import sys
 import os
 import dotenv
 
+# Add the classifier directory to the path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
 # Load environment variables from .env file if present
 dotenv.load_dotenv()
-
-# Add current directory to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from rag import process_and_store_embeddings
 

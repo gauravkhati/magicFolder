@@ -61,7 +61,6 @@ def classifyUsingLLMClassification(llmClassificationInput):
             print("[LLM] Warning: 'langchain-google-genai' not found. LLM classification disabled.")
             return []
         apikey = os.getenv("GOOGLE_API_KEY")
-        print(apikey)
         if not apikey:
             print("[LLM] Warning: GOOGLE_API_KEY not set. LLM classification disabled.")
             return []
@@ -73,7 +72,6 @@ def classifyUsingLLMClassification(llmClassificationInput):
             max_output_tokens=2000,
         )
         
-        # Ensure input is a JSON string
         if isinstance(llmClassificationInput, list):
             files_json = json.dumps(llmClassificationInput)
         else:
@@ -82,10 +80,7 @@ def classifyUsingLLMClassification(llmClassificationInput):
         prompt = CATEGORISATION_PROMPT.replace("{{FILES_JSON}}", files_json)
         response = llm.invoke(prompt)
         
-        # Extract content from AIMessage
         content = response.content if hasattr(response, 'content') else str(response)
-        
-        # Clean up markdown code blocks if present
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:

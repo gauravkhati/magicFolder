@@ -1,208 +1,188 @@
-# MagicFolder - Self-Organizing FUSE Filesystem
+# MagicFolder 📂✨
 
-A FUSE-based filesystem that automatically organizes files. Files written to the mount point "vanish" from the visible listing and are queued for automatic classification.
+**A Self-Organizing, AI-Powered FUSE Filesystem**
 
-## Phase 1: Passthrough Driver with "Vanish" Trick
+MagicFolder isn't just a place to store files—it's an intelligent system that organizes them for you. Drop a messy pile of PDFs, images, and text files into the mount point, and watch them **vanish**. Behind the scenes, a C++ FUSE driver hands them off to a Python "Brain" which reads, classifies, and indexes them into a vector database using Google Gemini and Pinecone.
 
-This implementation creates a FUSE filesystem that:
-1. **Mirrors a backing store**: All files are actually stored in `~/.magicFolder/raw`
-2. **Intercepts writes**: When files are written to the root of the mount point, they're marked for classification
-3. **Implements the "Vanish" trick**: Files in the classification queue are hidden from directory listings
+Once processed, you don't browse folders manually. You use the **Sci-Fi Terminal Interface (TUI)** to ask questions like *"Find my train tickets from last month"* or *"Summarize the invoices from January,"* and the system pulls the exact files you need.
 
-## Phase 2: The Python Brain (Analysis Engine)
+---
 
-The "Brain" is a standalone Python service that classifies files based on their content or metadata. It communicates with the FUSE driver (in future phases) or test scripts via ZeroMQ IPC.
+## 🏗 Architecture
 
-### Setup
-
-1. **Install Python dependencies**:
-   ```bash
-   pip install -r classifier/requirements.txt
-   ```
-
-2. **Run the Brain service**:
-   ```bash
-   python classifier/brain.py
-   ```
-
-3. **Test the Brain**:
-   In a separate terminal:
-   ```bash
-   python classifier/test_brain.py invoice.pdf
-   # Output: {'category': 'Documents', 'path': 'invoice.pdf'}
-   
-   python classifier/test_brain.py vacation.jpg
-   # Output: {'category': 'Images', 'path': 'vacation.jpg'}
-   ```
-
-## Prerequisites
-
-### macOS
-```bash
-# Install Homebrew if not already installed
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Install required packages
-brew install cmake pkg-config
-
-# Install macFUSE
-brew install --cask macfuse
-
-# IMPORTANT: After installing macFUSE:
-# 1. Restart your computer
-# 2. Go to System Preferences > Security & Privacy
-# 3. Allow the kernel extension from "Benjamin Fleischer"
+```text
+       USER
+         │ (Copy File)
+         ▼
+    [/tmp/magic]
+         │
+         ▼
+┌─────────────────────────┐
+│  LAYER 1: FUSE DRIVER   │
+│ (Intercepts & "Vanishes")
+└────────┬────────────────┘
+         │ (Write Raw)
+         ▼
+  [~/.magicFolder/raw] <──────────────────────────┐
+         │                                        │
+         │ (Signal via ZeroMQ)                    │
+         ▼                                        │ (Read Content)
+┌─────────────────────────┐        ┌──────────────┴──────────┐
+│  LAYER 2: THE BRAIN     │        │  LAYER 3: NEURAL LINK   │
+│ (OCR, Embed, Classify)  │        │      (TUI Client)       │
+└────────┬────────────────┘        └──────────────┬──────────┘
+         │ (Store Vectors)                        │ (Query)
+         ▼                                        ▼
+    [PINECONE DB] <─────────────────────── [MCP SERVER]
 ```
 
-### Linux (Ubuntu/Debian)
+The system consists of three distinct layers communicating via IPC and Vector Search:
+
+1.  **The "Vanish" Filesystem (C++ / FUSE)**: 
+    - Intercepts file writes at the kernel level.
+    - Files written to the mount point are immediately moved to a hidden backing store (`~/.magicFolder/raw`) and queued for processing.
+    - Uses ZeroMQ to signal the Brain when a file is fully written.
+
+2.  **The Brain (Python / Gemini / Pinecone)**:
+    - Listens for new file events.
+    - Performs OCR on images/PDFs and reads text files.
+    - Uses **Google Gemini** to classify documents and extract structured metadata (amounts, dates, PNRs).
+    - Generates embeddings and stores them in a **Pinecone** vector database.
+
+3.  **The Neural Link (MCP Server & TUI)**:
+    - An **MCP (Model Context Protocol)** server exposes search tools to AI agents.
+    - A **Textual-based TUI** (Terminal User Interface) acts as the client, allowing natural language queries to interact with your file knowledge base.
+
+---
+
+## 🛠 Prerequisites
+
+### System Requirements
+- **macOS** (requires macFUSE) or **Linux** (requires libfuse3).
+- **Python 3.12+**
+- **CMake** and C++ build tools.
+
+### API Keys
+You will need API keys for the AI backend:
+- **Google Gemini API Key** (for embedding and reasoning).
+- **Pinecone API Key** (for vector storage).
+
+---
+
+## 🚀 Installation
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/gauravkhati/MagicFolder.git
+cd MagicFolder
+```
+
+### 2. Install System Dependencies
+
+**macOS:**
+```bash
+# Install CMake and macFUSE
+brew install cmake macfuse
+
+# Note: After installing macFUSE, you must allow the kernel extension 
+# in System Preferences > Security & Privacy using the restart instructions provided by the installer.
+```
+
+**Ubuntu/Linux:**
 ```bash
 sudo apt-get update
 sudo apt-get install cmake pkg-config libfuse3-dev fuse3
 ```
 
-## Building
-
+### 3. Build the FUSE Driver
+We have a build script to handle the compilation:
 ```bash
-# Make scripts executable
-chmod +x build.sh mount.sh unmount.sh test.sh
-
-# Build the project
+chmod +x build.sh mount.sh unmount.sh
 ./build.sh
 ```
 
-## Usage
-
-### 1. Mount the filesystem
+### 4. Setup Python Environment
+Create a virtual environment and install dependencies:
 ```bash
-# In terminal 1 - this runs in foreground
-./mount.sh /tmp/magicFolder
-
-# Or with debug output
-./mount.sh /tmp/magicFolder -d
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-### 2. Test the vanish trick
+### 5. Configure Secrets
+Create a `.env` file in the root directory:
 ```bash
-# In terminal 2
-# Copy a file to the mount point
-cp test.txt /tmp/magicFolder/
-
-# The copy succeeds! But...
-ls /tmp/magicFolder/
-# Shows nothing! The file has "vanished"
-
-# However, the file actually exists in the backing store
-ls ~/.magicFolder/raw/
-# Shows: test.txt
+touch .env
 ```
 
-### 3. Run the test suite
+Add your keys to `.env`:
+```ini
+GOOGLE_API_KEY=your_gemini_key_here
+PINECONE_API_KEY=your_pinecone_key_here
+```
+
+---
+
+## 🕹 Usage
+
+Running MagicFolder involves three moving parts. You'll likely want three terminal tabs open.
+
+### Terminal 1: The Brain 🧠
+This service needs to run first to listen for incoming files.
 ```bash
-./test.sh
+source venv/bin/activate
+python classifier/brain.py
 ```
+*You'll see it waiting for ZeroMQ messages...*
 
-### 4. Unmount
+### Terminal 2: The Filesystem 📂
+Mount the MagicFolder. Replace `/tmp/magic` with your desired mount point.
 ```bash
-./unmount.sh /tmp/magicFolder
-# Or press Ctrl+C in the mount terminal
+# Create mount point if it doesn't exist
+mkdir -p /tmp/magic
+
+# Mount it
+./mount.sh /tmp/magic
+```
+*Any file you drop into `/tmp/magic` will now vanish and be processed by the Brain.*
+
+### Terminal 3: The Interface 🖥
+Launch the TUI to search and interact with your processed files.
+```bash
+source venv/bin/activate
+python tui_client/app.py
 ```
 
-## How It Works
+### Testing the Loop
+1.  **Drop a file**: Copy an invoice or an image into `/tmp/magic`.
+    ```bash
+    cp ~/Downloads/invoice_123.pdf /tmp/magic/
+    ```
+2.  **Watch it vanish**: The file will disappear from `/tmp/magic` instantly.
+3.  **Check the Brain**: Terminal 1 will show logs: "Processing invoice_123.pdf... Classified as Invoices."
+4.  **Query the TUI**: In Terminal 3, type:
+    > "Find the invoice I just uploaded and tell me the total amount."
 
-### Architecture
+---
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    User Space                            │
-│  ┌─────────────┐    ┌───────────────────────────────┐   │
-│  │   cp file   │───▶│      magic_folder (FUSE)      │   │
-│  └─────────────┘    │  ┌─────────────────────────┐  │   │
-│                     │  │   MagicFolderState      │  │   │
-│                     │  │  - unclassified_queue   │  │   │
-│                     │  │  - hidden_files set     │  │   │
-│                     │  └─────────────────────────┘  │   │
-│                     └───────────────┬───────────────┘   │
-└─────────────────────────────────────┼───────────────────┘
-                                      │
-┌─────────────────────────────────────┼───────────────────┐
-│                    Kernel Space     │                    │
-│                     ┌───────────────▼───────────────┐   │
-│                     │         FUSE Kernel           │   │
-│                     └───────────────┬───────────────┘   │
-└─────────────────────────────────────┼───────────────────┘
-                                      │
-┌─────────────────────────────────────┼───────────────────┐
-│                    Filesystem       │                    │
-│                     ┌───────────────▼───────────────┐   │
-│                     │   ~/.magicFolder/raw/         │   │
-│                     │   (Backing Store)             │   │
-│                     └───────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-```
+## 🔧 Troubleshooting
 
-### The Vanish Trick
+**"Operation not permitted" on macOS**:
+This is usually a permission issue with macFUSE. Ensure you have allowed the extension in System Settings and restarted your Mac.
 
-1. **File Creation (`create`)**: When a file is created in the root directory, it's added to `hidden_files` set and `unclassified_queue`
+**Files not vanishing?**:
+Ensure the FUSE process (Terminal 2) is actually running and you are writing to the *mount point*, not the backing store.
 
-2. **File Write (`write`)**: Data is written to the actual file in the backing store
+**TUI crashing on startup?**:
+Check that your `.env` file has valid API keys and that you are running inside the python virtual environment.
 
-3. **File Close (`release`)**: The file is marked as ready for classification
+**How to restart?**:
+If things get stuck:
+1.  Run `./unmount.sh /tmp/magic` to safely detach the filesystem.
+2.  Kill the Python processes.
+3.  Start over from Terminal 1.
 
-4. **Directory Listing (`readdir`)**: Files in `hidden_files` are excluded from the listing
+---
 
-### Key Components
-
-- **`MagicFolderState`**: Singleton class managing the filesystem state
-  - `unclassified_queue`: Vector of files awaiting classification
-  - `hidden_files`: Set of filenames to hide from root listing
-
-- **FUSE Operations**: Standard FUSE callbacks that pass through to the backing store
-  - `magic_getattr`: Get file attributes
-  - `magic_readdir`: List directory (with vanish trick)
-  - `magic_create`: Create new files (trigger vanish)
-  - `magic_read/write`: Read/write file data
-  - `magic_release`: Close file (finalize vanish)
-
-## Project Structure
-
-```
-MagicFolder/
-├── CMakeLists.txt      # CMake build configuration
-├── README.md           # This file
-├── build.sh            # Build script
-├── mount.sh            # Mount script
-├── unmount.sh          # Unmount script
-├── test.sh             # Test script
-└── src/
-    └── magic_folder.cpp  # Main FUSE driver implementation
-```
-
-## Next Phases
-
-### Phase 2: File Classification
-- Integrate Python API for content analysis
-- Analyze file headers and content
-- Categorize files (Financials, Code, Documents, Images, etc.)
-
-### Phase 3: Virtual Directories
-- Create virtual category directories
-- Move file inodes to appropriate subdirectories
-- Implement real-time file organization
-
-## Troubleshooting
-
-### macOS: "Operation not permitted"
-- Ensure macFUSE kernel extension is allowed in System Preferences
-- Restart your computer after installing macFUSE
-
-### "fusermount: command not found"
-- On macOS, use `diskutil unmount` or `umount` instead
-- The unmount.sh script handles this automatically
-
-### Files not vanishing
-- Ensure you're writing to the root of the mount point
-- Check the terminal running the FUSE driver for log messages
-
-## License
-
-MIT License
+## 📝 License
+MIT License. Built with ☕️ and code.

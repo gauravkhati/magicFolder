@@ -8,12 +8,11 @@ from rag import process_and_store_embeddings
 import threading
 
 IPC_ADDRESS = "ipc:///tmp/magic_brain.ipc"
-#need to get file as well as data
-# analyze file using llm and put down into specific categories
+
+#! first layer: heuristic classification
+#! seconf layer: llm classification
+
 categories=['Screenshots','Invoices','TrainTickers','IDProofs','Misc',"Notes","Credentials","Resume","Audio","Video","Archives"]
-# File → Fast Preprocessing → Heuristic Classification
-#                      ↓ (uncertain)
-#                   LLM Classification
 
     # Readable text files
 text_extensions = [
@@ -23,7 +22,7 @@ text_extensions = [
     ]
     
     # OCR candidates
-ocr_extensions = ['.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.pdf']
+ocr_extensions = ['.jpg', '.jpeg', '.tiff', '.bmp', '.pdf']
 
 def extract_content(filepath):
     """
@@ -31,7 +30,6 @@ def extract_content(filepath):
     """
     if not os.path.exists(filepath):
         return ""
-        
     filename = os.path.basename(filepath)
     name, ext = os.path.splitext(filename)
     ext = ext.lower()
@@ -58,7 +56,16 @@ def classifyUsingHeuristicClassification(filepath, content=None):
     ext = ext.lower()
 
     # Rule Engine
-    if ext in ['.mp3', '.wav', '.flac']:
+    if "uniply" in filename.lower():
+        return "uniplyAIFiles"
+    elif "screenshot" in filename.lower() or "screen_shot" in filename.lower():
+        return "Screenshots"
+    
+    if ext in ['.png', '.jpg', '.jpeg', '.tiff', '.bmp']:
+        return "Images"
+    elif ext in ['.csv']:
+        return "csvFiles"
+    elif ext in ['.mp3', '.wav', '.flac']:
         return "Audio"
     elif ext in ['.mp4', '.mov', '.avi', '.mkv']:
         return "Video"
@@ -74,9 +81,7 @@ def classifyUsingHeuristicClassification(filepath, content=None):
             for kw in [
                 "irctc",
                 "pnr",
-                "reservation slip",
                 "train no",
-                "journey date",
             ]
             ):
             return "TrainTickets"
@@ -90,20 +95,7 @@ def classifyUsingHeuristicClassification(filepath, content=None):
             "bill to",
             "tax invoice",]):
             return "Invoices"
-         # ---------------- Marksheets ----------------
-        if any(
-            kw in text
-            for kw in [
-                "marksheet",
-                "grade",
-                "percentage",
-                "cgpa",
-                "semester",
-                "university",
-                "board of education",
-            ]
-        ):
-            return "Marksheets"
+        
         # ---------------- ID Proofs ----------------
         if any(
             kw in text
@@ -112,8 +104,7 @@ def classifyUsingHeuristicClassification(filepath, content=None):
                 "government of india",
                 "passport",
                 "pan card",
-                "date of birth",
-                "dob",
+                "driving license",
             ]
         ):
             return "IDProofs"
@@ -136,9 +127,8 @@ def classifyUsingHeuristicClassification(filepath, content=None):
             for kw in [
                 "javascript",
                 "system design",
-                "meeting",
-                "",
                 "discussion points",
+                "mom"
             ]
         ):
             return "Notes"
@@ -162,19 +152,17 @@ def main():
             results = []
             
             if not files:
-                # Fallback for single file legacy request (optional, but good for robustness)
                 single_path = message.get("path")
                 if single_path:
                     files = [single_path]
             
-            # 1. Extract content for all files
             file_contents = []
             for filepath in files:
                 content = extract_content(filepath)
                 file_contents.append({"filepath": filepath, "content": content})
             print(file_contents)
             llmClassificationInput = []
-            # 2. Process files (Classification)
+
             for item in file_contents:
                 filepath = item["filepath"]
                 content = item["content"]
@@ -187,7 +175,6 @@ def main():
                 except Exception as e:
                     print(f"[Brain] Error classifying {filepath}: {e}")
                     results.append({"category": "Misc", "path": filepath, "error": str(e)})
-            # 3. LLM Classification for uncertain files
 
             print(llmClassificationInput)
          
@@ -205,14 +192,12 @@ def main():
             print(f"[Brain] Sending response: {response}")
             socket.send_json(response)
             
-            # 4. Post-Processing: RAG (Summarization + Embedding + Pinecone)
-            # Run in a separate thread to avoid blocking the next request loop
-            # We need to combine results with content
+            # Post-Processing: RAG (Summarization + Embedding + Vector Store)
             rag_input = []
             for res in results:
                 path = res["path"]
                 cat = res["category"]
-                # Find content
+
                 content = ""
                 for item in file_contents:
                     if item["filepath"] == path:
@@ -245,3 +230,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
