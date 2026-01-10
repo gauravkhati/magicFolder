@@ -11,7 +11,7 @@ from textual.app import App, ComposeResult
 from textual.containers import  Horizontal, Vertical
 from textual.widgets import Header, Footer, DirectoryTree, RichLog, Input, Label
 from textual.binding import Binding
-from textual import work
+from textual import work, on
 
 # MCP & AI Imports
 from mcp import ClientSession, StdioServerParameters
@@ -175,32 +175,22 @@ class AGenFinder(App):
         event.input.value = ""
         self.process_user_request(query)
 
-    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
-        """Handle file selection to preview content."""
+    @on(DirectoryTree.FileSelected)
+    def handle_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+        """Handle file selection to open the file with system default."""
         path = event.path
-        self.log_message(f"[bold yellow]:: OPENING PREVIEW: {os.path.basename(path)} ::[/]")
+        self.log_message(f"[bold yellow]:: LAUNCHING FILE: {os.path.basename(path)} ::[/]")
         
         try:
-            # Check file size (skip if > 1MB)
-            if os.path.getsize(path) > 1_000_000:
-                self.log_message("[bold red]File too large to preview.[/]")
-                return
-
-            # Read and display
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read(2000) # Read first 2KB only
-                if f.tell() < os.path.getsize(path):
-                    content += "\n\n... [PREVIEW TRUNCATED] ..."
-                
-            log_view = self.query_one("#log_view", RichLog)
-            log_view.write(f"\n[bold underline]{path}[/]")
-            log_view.write(f"[dim white]{content}[/dim]")
-            log_view.write("\n[bold green]:: END PREVIEW ::[/]\n")
+            if sys.platform == "darwin":
+                os.system(f'open "{path}"')
+            elif sys.platform == "linux":
+                os.system(f'xdg-open "{path}"')
+            elif sys.platform == "win32":
+                os.startfile(path)
             
-        except UnicodeDecodeError:
-            self.log_message("[bold red]Cannot preview binary file.[/]")
         except Exception as e:
-            self.log_message(f"[bold red]Error reading file: {e}[/]")
+            self.log_message(f"[bold red]Error opening file: {e}[/]")
 
     def action_refresh_tree(self) -> None:
         tree = self.query_one("#tree_view", DirectoryTree)
