@@ -6,6 +6,8 @@ MagicFolder isn't just a place to store files—it's an intelligent system that 
 
 Once processed, you don't browse folders manually. You use the **Sci-Fi Terminal Interface (TUI)** to ask questions like *"Find my train tickets from last month"* or *"Summarize the invoices from January,"* and the system pulls the exact files you need.
 
+Demo - https://drive.google.com/file/d/1fYBXTjMOY7DTYI43Nrr9SP1xjMMQuGRy/view?usp=share_link
+
 ---
 
 ## 🏗 Architecture
